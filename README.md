@@ -1,0 +1,2 @@
+# community
+ DefectDojo Community Content
