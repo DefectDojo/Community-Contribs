@@ -1,0 +1,308 @@
+---
+  AWSTemplateFormatVersion: 2010-09-09
+  Description: DefectDojo Setup
+  Parameters:
+    TemplateURLPath:
+      Type: String
+    ApplicationName:
+      Type: String
+      AllowedPattern: "[A-Za-z0-9_]+"
+      ConstraintDescription: "Only alphanumeric characters and underscore. MinLength: 5, MaxLength: 20"
+      MaxLength: 20
+      MinLength: 5
+      Default: "DefectDojo"
+    CidrBlock:
+      Type: String
+      Description: "Example CidrBlock 192.168.1.0/24"
+      AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(1[6-9]|2[0-8])"
+      ConstraintDescription: "Example CidrBlock 192.168.1.0/24. Value after '/' should be between 16-28."
+      Default: "192.168.0.0/24"
+    EnableDnsSupport:
+      Type: String
+      Description: "Enable DNS resolution in the vpc ?"
+      AllowedValues: ["true", "false"]
+      Default: "true"
+    EnableDnsHostnames:
+      Type: String
+      Description: "Enable DNS Hostname resolution in the vpc ?"
+      AllowedValues: ["true", "false"]
+      Default: "false"
+    InstanceTenancy:
+      Type: String
+      Description: "Instance Tenancy ?"
+      AllowedValues: ["default", "dedicated"]
+      Default: "default"
+    PublicSubnet1AvailabilityZone:
+      Type: String
+      Description: "Public Subnet1 AZ"
+      Default: "us-east-1a"
+    PublicSubnet2AvailabilityZone:
+      Type: String
+      Description: "Public Subnet2 AZ"
+      Default: "us-east-1b"
+    PublicSubnet1CidrBlock:
+      Type: String
+      Description: "Public Subnet1 CIDR Block"
+      AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(1[6-9]|2[0-8])"
+      ConstraintDescription: "Subnet Cidr Block should be a block within VPC CIDR Block."
+      Default: "192.168.0.0/26"
+    PublicSubnet2CidrBlock:
+      Type: String
+      Description: "Public Subnet2 CIDR Block"
+      AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(1[6-9]|2[0-8])"
+      ConstraintDescription: "Subnet Cidr Block should be a block within VPC CIDR Block."
+      Default: "192.168.0.64/26"
+    PrivateSubnet1AvailabilityZone:
+      Type: String
+      Description: "Private Subnet1 AZ"
+      Default: "us-east-1a"
+    PrivateSubnet2AvailabilityZone:
+      Type: String
+      Description: "Private Subnet2 AZ"
+      Default: "us-east-1b"
+    PrivateSubnet1CidrBlock:
+      Type: String
+      Description: "Private Subnet1 CIDR Block"
+      AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(1[6-9]|2[0-8])"
+      ConstraintDescription: "Subnet Cidr Block should be a block within VPC CIDR Block."
+      Default: "192.168.0.128/26"
+    PrivateSubnet2CidrBlock:
+      Type: String
+      Description: "Private Subnet2 CIDR Block"
+      AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(1[6-9]|2[0-8])"
+      ConstraintDescription: "Subnet Cidr Block should be a block within VPC CIDR Block."
+      Default: "192.168.0.192/26"
+    RDSStorage:
+      Type: String
+      Description: "RDS DB Size"
+    RDSAllowMajorVersionUpgrade:
+      Type: String
+      Description: "RDS Allow Major Version Upgrade ?"
+      AllowedValues: ["true", "false"]
+      Default: "false"
+    RDSAutoMinorVersionUpgrade:
+      Type: String
+      Description: "RDS Allow Minor Version Upgrade ?"
+      AllowedValues: ["true", "false"]
+      Default: "true"
+    RDSDBInstanceIdentifier:
+      Type: String
+      Description: "RDS DB Instance Identifier"
+      Default: "defectdojo"
+    RDSDBInstanceClass:
+      Type: String
+      Description: "RDS DB Instance Class"
+      Default: "db.t2.medium"
+    RDSDBEngine:
+      Type: String
+      Description: "RDS DB Engine"
+      Default: postgres
+    RDSDBName:
+      Type: String
+      Description: "RDS DB Name"
+      Default: defectdojo
+    RDSMasterUsername:
+      Type: String
+      Description: "RDS DB Master User Name"
+    RDSMasterUserPassword:
+      Type: String
+      Description: "RDS DB Master User Password"
+    RDSMultiAZ:
+      Type: String
+      Description: "RDS Multi AZ ?"
+      AllowedValues: ["true", "false"]
+      Default: "false"
+    RDSPubliclyAccessible:
+      Type: String
+      Description: "RDS Publicly Accessible?"
+      AllowedValues: ["true", "false"]
+      Default: "false"
+    RDSDBPort:
+      Type: String
+      Description: "RDS DB Port"
+      Default: 5432
+    ELBScheme:
+      Type: String
+      Description: "ALB Internal or Internet Facing ?"
+      AllowedValues: ["internet-facing", "internal"]
+      Default: "internal"
+    ALBType:
+      Type: String
+      Description: "ALB Type ?"
+      Default: "application"
+    DefectDojoAppPort:
+      Type: String
+      Description: "Defect Dojo Application Port"
+      Default: "8080"
+    ALBSSLCertificateARN:
+      Type: String
+      Description: "ALB SSL Listener certificate"
+    ALBHTTPSListenerPort:
+      Type: String
+      Description: "ALB HTTPS Listener port"
+      Default: 443
+    AMIID:
+      Type: String
+      Description: "AMI ID"
+      Default: "ami-068ab34816099a0a9"
+    InstanceType:
+      Type: String
+      Description: "Instance Type"
+      Default: "t2.micro"
+    KeyName:
+      Type: String
+      Description: "SSH Key Name"
+    AccessAllowedHost1:
+      Type: String
+      Description: "Host1 from which ALB, Bastion Host should be accessible"
+    AppEBSVolumeSize:
+      Type: String
+      Description: "EBS Volume Size"
+      Default: 30
+    AppEBSVolumeType:
+      Type: String
+      Description: "EBS Volume Type"
+      Default: gp2
+    AppEBSVolumeDevicePath:
+      Type: String
+      Description: "EBS Volume Device Path"
+      Default: "/dev/xvdh"
+    AppEBSVolumeMountPoint:
+      Type: String
+      Description: "EBS Volume Mount Point"
+      Default: "/defectdojo"
+    DefectoDojoRepoURL:
+      Type: String
+      Description: "DefectDojo GitHub repo url"
+      Default: "https://github.com/DefectDojo/django-DefectDojo.git"
+    DefectDojoRepoBranch:
+      Type: String
+      Description: "DefectDojo repo branch"
+      Default: "master"
+    DefectDojoBatchModeDBType:
+      Type: String
+      Description: "DefectDojo Batch Mode DB Type(mysql:-1, postgres:-2)"
+      Default: 2
+    DefectDojoBatchModeAdminUser:
+      Type: String
+      Description: "Defect Dojo Application Admin User"
+    DefectDojoBatchModeAdminPassword:
+      Type: String
+      Description: "Defect Dojo Application Admin User Password"
+  Resources:
+    DefectDojoVPC:
+      Type: AWS::CloudFormation::Stack
+      Properties:
+        TemplateURL:  !Join [ "", [ !Ref TemplateURLPath, "defectdojo_vpc.yml"  ] ]
+        Parameters:
+          ApplicationName: !Ref ApplicationName
+          CidrBlock: !Ref CidrBlock
+          EnableDnsSupport: !Ref EnableDnsSupport
+          EnableDnsHostnames: !Ref EnableDnsHostnames
+          InstanceTenancy: !Ref InstanceTenancy
+          PublicSubnet1AvailabilityZone: !Ref PublicSubnet1AvailabilityZone
+          PublicSubnet1CidrBlock: !Ref PublicSubnet1CidrBlock
+          PublicSubnet2AvailabilityZone: !Ref PublicSubnet2AvailabilityZone
+          PublicSubnet2CidrBlock: !Ref PublicSubnet2CidrBlock
+          PrivateSubnet1AvailabilityZone: !Ref PrivateSubnet1AvailabilityZone
+          PrivateSubnet1CidrBlock: !Ref PrivateSubnet1CidrBlock
+          PrivateSubnet2AvailabilityZone: !Ref PrivateSubnet2AvailabilityZone
+          PrivateSubnet2CidrBlock: !Ref PrivateSubnet2CidrBlock
+    DefectDojoSecurityGroups:
+      Type: AWS::CloudFormation::Stack
+      DependsOn: DefectDojoVPC
+      Properties:
+        TemplateURL:  !Join [ "", [ !Ref TemplateURLPath, "defectdojo_securitygroups.yml"  ] ]
+        Parameters:
+          ApplicationName: !Ref ApplicationName
+          DBPort: !Ref RDSDBPort
+          AppPort: !Ref DefectDojoAppPort
+          AccessAllowedHost1: !Ref AccessAllowedHost1
+    DefectDojoDB:
+      Type: AWS::CloudFormation::Stack
+      DependsOn: DefectDojoSecurityGroups
+      Properties:
+        TemplateURL:  !Join [ "", [ !Ref TemplateURLPath, "defectdojo_db.yml"  ] ]
+        Parameters:
+          ApplicationName: !Ref ApplicationName
+          RDSStorage: !Ref RDSStorage
+          RDSAllowMajorVersionUpgrade: !Ref RDSAllowMajorVersionUpgrade
+          RDSAutoMinorVersionUpgrade: !Ref RDSAutoMinorVersionUpgrade
+          RDSDBInstanceIdentifier: !Ref RDSDBInstanceIdentifier
+          RDSDBInstanceClass: !Ref RDSDBInstanceClass
+          RDSDBEngine: !Ref RDSDBEngine
+          RDSDBPort: !Ref RDSDBPort
+          RDSDBName: !Ref RDSDBName
+          RDSMasterUsername: !Ref RDSMasterUsername
+          RDSMasterUserPassword: !Ref RDSMasterUserPassword
+          RDSMultiAZ: !Ref RDSMultiAZ
+          RDSPubliclyAccessible: !Ref RDSPubliclyAccessible
+    DefectDojoEC2:
+      Type: AWS::CloudFormation::Stack
+      DependsOn: DefectDojoDB
+      Properties:
+        TemplateURL:  !Join [ "", [ !Ref TemplateURLPath, "defectdojo_ec2.yml"  ] ]
+        Parameters:
+          ApplicationName: !Ref ApplicationName
+          ELBScheme: !Ref ELBScheme
+          ALBType: !Ref ALBType
+          DefectDojoAppPort: !Ref DefectDojoAppPort
+          ALBSSLCertificateARN: !Ref ALBSSLCertificateARN
+          ALBHTTPSListenerPort: !Ref ALBHTTPSListenerPort
+          AMIID: !Ref AMIID
+          InstanceType: !Ref InstanceType
+          KeyName: !Ref KeyName
+          AppEBSVolumeSize: !Ref AppEBSVolumeSize
+          AppEBSVolumeType: !Ref AppEBSVolumeType
+          AppEBSVolumeDevicePath: !Ref AppEBSVolumeDevicePath
+          AppEBSVolumeMountPoint: !Ref AppEBSVolumeMountPoint
+          DefectoDojoRepoURL: !Ref DefectoDojoRepoURL
+          DefectDojoRepoBranch: !Ref DefectDojoRepoBranch
+          DefectDojoBatchModeDBType: !Ref DefectDojoBatchModeDBType
+          DefectDojoBatchModeSQLHost: !GetAtt DefectDojoDB.Outputs.DBEndPoint
+          DefectDojoBatchModeSQLPort: !Ref RDSDBPort
+          DefectDojoBatchModeSQLUser: !Ref RDSMasterUsername
+          DefectDojoBatchModeSQLPassword: !Ref RDSMasterUserPassword
+          DefectDojoBatchModeDBName: !Ref RDSDBName
+          DefectDojoBatchModeAdminUser: !Ref DefectDojoBatchModeAdminUser
+          DefectDojoBatchModeAdminPassword: !Ref DefectDojoBatchModeAdminPassword
+  Outputs:
+    DefectDojoStackRef:
+      Value: !Ref DefectDojoVPC
+    DefectDojoVPCID:
+      Value: !GetAtt DefectDojoVPC.Outputs.VPCID
+    DefectDojoPublicSubnet1ID:
+      Value: !GetAtt DefectDojoVPC.Outputs.PublicSubnet1ID
+    DefectDojoPublicSubnet2ID:
+      Value: !GetAtt DefectDojoVPC.Outputs.PublicSubnet2ID
+    DefectDojoPrivateSubnet1ID:
+      Value: !GetAtt DefectDojoVPC.Outputs.PrivateSubnet1ID
+    DefectDojoPrivateSubnet2ID:
+      Value: !GetAtt DefectDojoVPC.Outputs.PrivateSubnet2ID
+    DefectDojoELBSG:
+      Value: !GetAtt DefectDojoSecurityGroups.Outputs.ELBSG
+    DefectDojoAppSG:
+      Value: !GetAtt DefectDojoSecurityGroups.Outputs.AppSG
+    DefectDojoDBSG:
+      Value: !GetAtt DefectDojoSecurityGroups.Outputs.DBSG
+    DefectDojoBastionSG:
+      Value: !GetAtt DefectDojoSecurityGroups.Outputs.BastionSG
+    DefectDojoDB:
+      Value: !GetAtt DefectDojoDB.Outputs.DB
+    DefectDojoDBEndPoint:
+      Value: !GetAtt DefectDojoDB.Outputs.DBEndPoint
+    DefectDojoALB:
+      Value: !GetAtt DefectDojoEC2.Outputs.ALB
+    DefectDojoALBDNSName:
+      Value: !GetAtt DefectDojoEC2.Outputs.ALBDNSName
+    DefectDojoALBTG:
+      Value: !GetAtt DefectDojoEC2.Outputs.TG
+    DefectDojoAppInstance:
+      Value: !GetAtt DefectDojoEC2.Outputs.AppInstance
+    DefectDojoBastionInstance:
+      Value: !GetAtt DefectDojoEC2.Outputs.BastionInstance
+    DefectDojoAppURL:
+        Value: !Join
+          - ''
+          - - https://
+            - !GetAtt DefectDojoEC2.Outputs.ALBDNSName

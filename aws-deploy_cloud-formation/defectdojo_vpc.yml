@@ -1,0 +1,260 @@
+---
+  AWSTemplateFormatVersion: 2010-09-09
+  Description: DefectDojo VPC Creation
+  Parameters:
+    ApplicationName:
+      Type: String
+    CidrBlock:
+      Type: String
+    EnableDnsSupport:
+      Type: String
+    EnableDnsHostnames:
+      Type: String
+    InstanceTenancy:
+      Type: String
+    PublicSubnet1AvailabilityZone:
+      Type: String
+    PublicSubnet2AvailabilityZone:
+      Type: String
+    PublicSubnet1CidrBlock:
+      Type: String
+    PublicSubnet2CidrBlock:
+      Type: String
+    PrivateSubnet1AvailabilityZone:
+      Type: String
+    PrivateSubnet2AvailabilityZone:
+      Type: String
+    PrivateSubnet1CidrBlock:
+      Type: String
+    PrivateSubnet2CidrBlock:
+      Type: String
+  Resources:
+    VPC:
+      Type: "AWS::EC2::VPC"
+      Properties:
+         CidrBlock: !Ref CidrBlock
+         EnableDnsSupport: !Ref EnableDnsSupport
+         EnableDnsHostnames: !Ref EnableDnsHostnames
+         InstanceTenancy: !Ref InstanceTenancy
+         Tags:
+           -
+             Key: "ApplicationName"
+             Value: !Ref ApplicationName
+           -
+             Key: "Name"
+             Value: !Join ["-" , [!Ref ApplicationName, "VPC"]]
+    IGW:
+      Type: AWS::EC2::InternetGateway
+      Properties:
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: !Join ["-" , [!Ref ApplicationName, "IGW"]]
+    VPCIGWGatewayAttachment:
+      Type: AWS::EC2::VPCGatewayAttachment
+      Properties:
+        InternetGatewayId: !Ref IGW
+        VpcId: !Ref VPC
+    PublicSubnet1:
+      Type: AWS::EC2::Subnet
+      Properties:
+        AvailabilityZone: !Ref PublicSubnet1AvailabilityZone
+        CidrBlock: !Ref PublicSubnet1CidrBlock
+        VpcId: !Ref VPC
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: "PublicSubnet1"
+    PublicSubnet2:
+      Type: AWS::EC2::Subnet
+      Properties:
+        AvailabilityZone: !Ref PublicSubnet2AvailabilityZone
+        CidrBlock: !Ref PublicSubnet2CidrBlock
+        VpcId: !Ref VPC
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: "PublicSubnet2"
+    PublicSubnet1RT:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref VPC
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: "PublicSubnet1RT"
+    PublicSubnet2RT:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref VPC
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: "PublicSubnet2RT"
+    PublicSubnet1Route:
+      Type: AWS::EC2::Route
+      DependsOn: VPCIGWGatewayAttachment
+      Properties:
+        RouteTableId: !Ref PublicSubnet1RT
+        DestinationCidrBlock: "0.0.0.0/0"
+        GatewayId: !Ref IGW
+    PublicSubnet2Route:
+      Type: AWS::EC2::Route
+      DependsOn: VPCIGWGatewayAttachment
+      Properties:
+        RouteTableId: !Ref PublicSubnet2RT
+        DestinationCidrBlock: "0.0.0.0/0"
+        GatewayId: !Ref IGW
+    PublicSubnet1RTAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId: !Ref PublicSubnet1RT
+        SubnetId: !Ref PublicSubnet1
+    PublicSubnet2RTAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId: !Ref PublicSubnet2RT
+        SubnetId: !Ref PublicSubnet2
+    PrivateSubnet1NATGWEIP:
+      Type: AWS::EC2::EIP
+      Properties:
+        Domain: "vpc"
+    PrivateSubnet2NATGWEIP:
+      Type: AWS::EC2::EIP
+      Properties:
+        Domain: "vpc"
+    PrivateSubnet1NATGW:
+      Type: AWS::EC2::NatGateway
+      Properties:
+        AllocationId: !GetAtt PrivateSubnet1NATGWEIP.AllocationId
+        SubnetId: !Ref PublicSubnet1
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: !Join ["-" , [!Ref ApplicationName, "PrivateSubnet1NATGW"]]
+    PrivateSubnet2NATGW:
+      Type: AWS::EC2::NatGateway
+      Properties:
+        AllocationId: !GetAtt PrivateSubnet2NATGWEIP.AllocationId
+        SubnetId: !Ref PublicSubnet2
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: !Join ["-" , [!Ref ApplicationName, "PrivateSubnet2NATGW"]]
+    PrivateSubnet1:
+      Type: AWS::EC2::Subnet
+      Properties:
+        AvailabilityZone: !Ref PrivateSubnet1AvailabilityZone
+        CidrBlock: !Ref PrivateSubnet1CidrBlock
+        VpcId: !Ref VPC
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: "PrivateSubnet1"
+    PrivateSubnet2:
+      Type: AWS::EC2::Subnet
+      Properties:
+        AvailabilityZone: !Ref PrivateSubnet2AvailabilityZone
+        CidrBlock: !Ref PrivateSubnet2CidrBlock
+        VpcId: !Ref VPC
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: "PrivateSubnet2"
+    PrivateSubnet1RT:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref VPC
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: "PrivateSubnet1RT"
+    PrivateSubnet2RT:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref VPC
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: "PrivateSubnet2RT"
+    PrivateSubnet1Route:
+      Type: AWS::EC2::Route
+      Properties:
+        DestinationCidrBlock: "0.0.0.0/0"
+        NatGatewayId: !Ref PrivateSubnet1NATGW
+        RouteTableId: !Ref PrivateSubnet1RT
+    PrivateSubnet2Route:
+      Type: AWS::EC2::Route
+      Properties:
+        DestinationCidrBlock: "0.0.0.0/0"
+        NatGatewayId: !Ref PrivateSubnet2NATGW
+        RouteTableId: !Ref PrivateSubnet2RT
+    PrivateSubnet1RTAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId: !Ref PrivateSubnet1RT
+        SubnetId: !Ref PrivateSubnet1
+    PrivateSubnet2RTAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId: !Ref PrivateSubnet2RT
+        SubnetId: !Ref PrivateSubnet2
+  Outputs:
+    VPCID:
+      Description: "DefectDojo VPC ID."
+      Value: !Ref VPC
+      Export:
+        Name: !Join [ "-", [ !Ref ApplicationName, "VPCID" ] ]
+    PublicSubnet1ID:
+      Description: "Public Subnet 1 ID."
+      Value: !Ref PublicSubnet1
+      Export:
+        Name: !Join [ "-", [ !Ref ApplicationName, "PublicSubnet1ID" ] ]
+    PrivateSubnet1ID:
+      Description: "Private Subnet 1 ID."
+      Value: !Ref PrivateSubnet1
+      Export:
+        Name: !Join [ "-", [ !Ref ApplicationName, "PrivateSubnet1ID" ] ]
+    PublicSubnet2ID:
+      Description: "Public Subnet 2 ID."
+      Value: !Ref PublicSubnet2
+      Export:
+        Name: !Join [ "-", [ !Ref ApplicationName, "PublicSubnet2ID" ] ]
+    PrivateSubnet2ID:
+      Description: "Private Subnet 2 ID."
+      Value: !Ref PrivateSubnet2
+      Export:
+        Name: !Join [ "-", [ !Ref ApplicationName, "PrivateSubnet2ID" ] ]

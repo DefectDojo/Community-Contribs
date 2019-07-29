@@ -1,0 +1,75 @@
+---
+  AWSTemplateFormatVersion: 2010-09-09
+  Description: DefectDojo DB instance.
+  Parameters:
+    ApplicationName:
+      Type: String
+    RDSStorage:
+      Type: String
+    RDSAllowMajorVersionUpgrade:
+      Type: String
+    RDSAutoMinorVersionUpgrade:
+      Type: String
+    RDSDBInstanceClass:
+      Type: String
+    RDSDBEngine:
+      Type: String
+    RDSDBPort:
+      Type: String
+    RDSDBName:
+      Type: String
+    RDSMasterUsername:
+      Type: String
+    RDSMasterUserPassword:
+      Type: String
+    RDSMultiAZ:
+      Type: String
+    RDSPubliclyAccessible:
+      Type: String
+    RDSMasterUserPassword:
+      Type: String
+    RDSDBInstanceIdentifier:
+      Type: String
+  Resources:
+    DBSubnetGroup:
+      Type: "AWS::RDS::DBSubnetGroup"
+      Properties:
+        DBSubnetGroupDescription: DefectDojo DB Subnet Group
+        DBSubnetGroupName: !Join ["-" , [!Ref ApplicationName, "SubnetGroup"]]
+        SubnetIds:
+          - Fn::ImportValue: !Sub ${ApplicationName}-PrivateSubnet1ID
+          - Fn::ImportValue: !Sub ${ApplicationName}-PrivateSubnet2ID
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: !Join ["-" , [!Ref ApplicationName, "SubnetGroup"]]
+    DB:
+      Type: AWS::RDS::DBInstance
+      Properties:
+        DBInstanceIdentifier: !Ref RDSDBInstanceIdentifier
+        AllocatedStorage: !Ref RDSStorage
+        AllowMajorVersionUpgrade: !Ref RDSAllowMajorVersionUpgrade
+        AutoMinorVersionUpgrade: !Ref RDSAutoMinorVersionUpgrade
+        Engine: !Ref RDSDBEngine
+        DBInstanceClass: !Ref RDSDBInstanceClass
+        Port: !Ref RDSDBPort
+        DBSubnetGroupName: !Ref DBSubnetGroup
+        DBName: !Ref RDSDBName
+        MasterUsername: !Ref RDSMasterUsername
+        MasterUserPassword: !Ref RDSMasterUserPassword
+        MultiAZ: !Ref RDSMultiAZ
+        PubliclyAccessible: !Ref RDSPubliclyAccessible
+        VPCSecurityGroups:
+          - Fn::ImportValue: !Sub ${ApplicationName}-DBSG
+  Outputs:
+    DB:
+      Value: !Ref DB
+      Export:
+        Name: !Join [ "-", [ !Ref ApplicationName, "DB" ] ]
+    DBEndPoint:
+      Value: !GetAtt DB.Endpoint.Address
+      Export:
+        Name: !Join [ "-", [ !Ref ApplicationName, "DBEndPoint" ] ]

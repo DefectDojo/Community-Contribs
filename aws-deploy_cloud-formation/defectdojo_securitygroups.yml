@@ -1,0 +1,124 @@
+---
+  AWSTemplateFormatVersion: 2010-09-09
+  Description: DefectDojo Application Security Groups
+  Parameters:
+    ApplicationName:
+      Type: String
+    DBPort:
+      Type: String
+    AppPort:
+      Type: String
+    AccessAllowedHost1:
+      Type: String
+  Resources:
+    ELBSG:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupName: !Join ["-" , [!Ref ApplicationName, "ELB"]]
+        GroupDescription: !Join [" " , [!Ref ApplicationName, "ELB", "security group."]]
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref AccessAllowedHost1
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: !Join ["-" , [!Ref ApplicationName, "ELB"]]
+        VpcId:
+          Fn::ImportValue: !Sub ${ApplicationName}-VPCID
+    AppSG:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupName: !Join ["-" , [!Ref ApplicationName, "AppSG"]]
+        GroupDescription: !Join [" " , [!Ref ApplicationName, "App", "security group."]]
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: !Join ["-" , [!Ref ApplicationName, "App"]]
+        VpcId:
+          Fn::ImportValue: !Sub ${ApplicationName}-VPCID
+    DBSG:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupName: !Join ["-" , [!Ref ApplicationName, "DBSG"]]
+        GroupDescription: !Join [" " , [!Ref ApplicationName, "DB", "security group."]]
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: !Join ["-" , [!Ref ApplicationName, "DB"]]
+        VpcId:
+          Fn::ImportValue: !Sub ${ApplicationName}-VPCID
+    BastionSG:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupName: !Join ["-" , [!Ref ApplicationName, "BastionSG"]]
+        GroupDescription: !Join [" " , [!Ref ApplicationName, "Bastion", "security group."]]
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AccessAllowedHost1
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: !Join ["-" , [!Ref ApplicationName, "Bastion"]]
+        VpcId:
+          Fn::ImportValue: !Sub ${ApplicationName}-VPCID
+    AppToDBInGress:
+      Type: AWS::EC2::SecurityGroupIngress
+      Properties:
+        GroupId: !Ref DBSG
+        SourceSecurityGroupId: !Ref AppSG
+        FromPort: !Ref DBPort
+        ToPort: !Ref DBPort
+        IpProtocol: "tcp"
+    ELBToAppInGress:
+      Type: AWS::EC2::SecurityGroupIngress
+      Properties:
+        GroupId: !Ref AppSG
+        SourceSecurityGroupId: !Ref ELBSG
+        FromPort: !Ref AppPort
+        ToPort: !Ref AppPort
+        IpProtocol: "tcp"
+    BastionToAppSSHInGress:
+      Type: AWS::EC2::SecurityGroupIngress
+      Properties:
+        GroupId: !Ref AppSG
+        SourceSecurityGroupId: !Ref BastionSG
+        FromPort: 22
+        ToPort: 22
+        IpProtocol: "tcp"
+  Outputs:
+    ELBSG:
+      Description: "ELB Security Group ID"
+      Value: !Ref ELBSG
+      Export:
+        Name: !Join [ "-", [ !Ref ApplicationName, "ELBSG" ] ]
+    AppSG:
+      Description: "App Security Group ID"
+      Value: !Ref AppSG
+      Export:
+        Name: !Join [ "-", [ !Ref ApplicationName, "AppSG" ] ]
+    DBSG:
+      Description: "DB Security Group ID"
+      Value: !Ref DBSG
+      Export:
+        Name: !Join [ "-", [ !Ref ApplicationName, "DBSG" ] ]
+    BastionSG:
+      Description: "Bastion Security Group ID"
+      Value: !Ref BastionSG
+      Export:
+        Name: !Join [ "-", [ !Ref ApplicationName, "BastionSG" ] ]

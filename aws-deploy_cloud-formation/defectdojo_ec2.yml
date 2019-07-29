@@ -1,0 +1,279 @@
+---
+  AWSTemplateFormatVersion: 2010-09-09
+  Description: DefectDojo Setup
+  Parameters:
+    ApplicationName:
+      Type: String
+    ELBScheme:
+      Type: String
+    ALBType:
+      Type: String
+    DefectDojoAppPort:
+      Type: String
+    ALBSSLCertificateARN:
+      Type: String
+    ALBHTTPSListenerPort:
+      Type: String
+    AMIID:
+      Type: String
+    InstanceType:
+      Type: String
+    KeyName:
+      Type: String
+    AppEBSVolumeSize:
+      Type: String
+    AppEBSVolumeType:
+      Type: String
+    AppEBSVolumeDevicePath:
+      Type: String
+    AppEBSVolumeMountPoint:
+      Type: String
+    DefectoDojoRepoURL:
+      Type: String
+    DefectDojoRepoBranch:
+      Type: String
+    DefectDojoBatchModeDBType:
+      Type: String
+    DefectDojoBatchModeSQLHost:
+      Type: String
+    DefectDojoBatchModeSQLPort:
+      Type: String
+    DefectDojoBatchModeSQLUser:
+      Type: String
+    DefectDojoBatchModeSQLPassword:
+      Type: String
+    DefectDojoBatchModeDBName:
+      Type: String
+    DefectDojoBatchModeAdminUser:
+      Type: String
+    DefectDojoBatchModeAdminPassword:
+      Type: String
+  Resources:
+    DefectDojoTG:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties:
+        HealthCheckIntervalSeconds: 6
+        HealthCheckPath: /
+        HealthCheckPort: !Ref DefectDojoAppPort
+        HealthCheckProtocol: HTTP
+        HealthCheckTimeoutSeconds: 5
+        HealthyThresholdCount: 2
+        Matcher:
+          HttpCode: '200,302'
+        Name: !Ref ApplicationName
+        Port: !Ref DefectDojoAppPort
+        Protocol: HTTP
+        TargetType: instance
+        Targets:
+          - Id: !Ref DefectDojoAppInstance
+            Port: !Ref DefectDojoAppPort
+        UnhealthyThresholdCount: 2
+        VpcId:
+          Fn::ImportValue: !Sub ${ApplicationName}-VPCID
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+    DefectDojoALB:
+      Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+      Properties:
+        Name: !Ref ApplicationName
+        Scheme: !Ref ELBScheme
+        SecurityGroups:
+          - Fn::ImportValue: !Sub ${ApplicationName}-ELBSG
+        Subnets:
+          - Fn::ImportValue: !Sub ${ApplicationName}-PublicSubnet1ID
+          - Fn::ImportValue: !Sub ${ApplicationName}-PublicSubnet2ID
+        Type: !Ref ALBType
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: !Join ["-" , [!Ref ApplicationName, "ALB"]]
+    DefectDojoALBHTTPSListener:
+      Type: AWS::ElasticLoadBalancingV2::Listener
+      Properties:
+        Certificates:
+          - CertificateArn: !Ref ALBSSLCertificateARN
+        DefaultActions:
+          - Type: forward
+            TargetGroupArn: !Ref DefectDojoTG
+        LoadBalancerArn: !Ref DefectDojoALB
+        Port: !Ref ALBHTTPSListenerPort
+        Protocol: HTTPS
+    DefectDojoAppInstance:
+      Type: AWS::EC2::Instance
+      CreationPolicy:
+        ResourceSignal:
+          Timeout: PT7M
+      Metadata:
+        AWS::CloudFormation::Init:
+          configSets:
+            DefectDojoSetup:
+              - install_and_enable_cfn_hup
+              - install_packages
+          install_and_enable_cfn_hup:
+            files:
+              /etc/cfn/cfn-hup.conf:
+                content: !Join
+                  - ''
+                  - - "[main]\n"
+                    - stack=
+                    - !Ref 'AWS::StackId'
+                    - "\n"
+                    - region=
+                    - !Ref 'AWS::Region'
+                    - "\n"
+                mode: '000400'
+                owner: root
+                group: root
+              /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+                content: !Join
+                  - ''
+                  - - "[cfn-auto-reloader-hook]\n"
+                    - "triggers=post.update\n"
+                    - "path=Resources.DefectDojoAppInstance.Metadata.AWS::CloudFormation::Init\n"
+                    - 'action=/opt/aws/bin/cfn-init -v '
+                    - '         --stack '
+                    - !Ref 'AWS::StackName'
+                    - '         --resource DefectDojoAppInstance '
+                    - '         --configsets DefectDojoSetup '
+                    - '         --region '
+                    - !Ref 'AWS::Region'
+                    - "\n"
+                    - "runas=root\n"
+              /lib/systemd/system/cfn-hup.service:
+                content: !Join
+                  - ''
+                  - - "[Unit]\n"
+                    - "Description=cfn-hup daemon\n\n"
+                    - "[Service]\n"
+                    - "Type=simple\n"
+                    - "ExecStart=/opt/aws/bin/cfn-hup\n"
+                    - "Restart=always\n\n"
+                    - "[Install]\n"
+                    - WantedBy=multi-user.target
+            commands:
+              '01enable_cfn_hup':
+                command: systemctl enable cfn-hup.service
+              '02start_cfn_hup':
+                command: systemctl start cfn-hup.service
+          install_packages:
+            packages:
+              apt:
+                expect: []
+      Properties:
+        ImageId: !Ref AMIID
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub ${ApplicationName}-AppSG
+        SubnetId:
+          Fn::ImportValue: !Sub ${ApplicationName}-PrivateSubnet1ID
+        BlockDeviceMappings:
+          - DeviceName: !Ref AppEBSVolumeDevicePath
+            Ebs:
+              VolumeSize: !Ref AppEBSVolumeSize
+        UserData:
+          Fn::Base64: !Sub |
+              #!/bin/bash -xe
+
+              apt-get update -y
+
+              #'expect' package required by DefectDojo
+              apt-get install -y expect
+
+              #AWS Cloud Init Setup
+              apt-get install -y python-setuptools
+              mkdir -p /opt/aws/bin
+              wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+              easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+
+              #Format and Mount Volume
+              mkfs -t ext4 ${AppEBSVolumeDevicePath}
+              mkdir -p ${AppEBSVolumeMountPoint}
+              mount ${AppEBSVolumeDevicePath} ${AppEBSVolumeMountPoint}
+              uuid=$(blkid ${AppEBSVolumeDevicePath} | cut -d " " -f2)
+              echo $uuid ${AppEBSVolumeMountPoint} ext4 defaults 0 2 >> /etc/fstab
+              mount -a
+
+              #Download Code
+              cd ${AppEBSVolumeMountPoint}
+              if [ ${DefectDojoRepoBranch} == "master" ]
+              then
+                git clone ${DefectoDojoRepoURL}
+              else
+                git clone -b ${DefectDojoRepoBranch} ${DefectoDojoRepoURL}
+              fi
+              chown -R ubuntu:ubuntu ${AppEBSVolumeMountPoint}
+
+              #Export BATCH MODE Properties
+              private_ip=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+              batch_mode_properties_file=${AppEBSVolumeMountPoint}/django-DefectDojo/batch_mode.properties
+              echo "batch_mode_properties_file $batch_mode_properties_file" > /tmp/vas.txt
+              rm -f $batch_mode_properties_file
+
+              echo DBTYPE=${DefectDojoBatchModeDBType} >> $batch_mode_properties_file
+              echo SQLHOST=${DefectDojoBatchModeSQLHost} >> $batch_mode_properties_file
+              echo SQLPORT=${DefectDojoBatchModeSQLPort} >> $batch_mode_properties_file
+              echo SQLUSER=${DefectDojoBatchModeSQLUser} >> $batch_mode_properties_file
+              echo SQLPWD=${DefectDojoBatchModeSQLPassword} >> $batch_mode_properties_file
+              echo DBNAME=${DefectDojoBatchModeDBName} >> $batch_mode_properties_file
+              echo DEFECTDOJO_ADMIN_USER=${DefectDojoBatchModeAdminUser} >> $batch_mode_properties_file
+              echo DEFECTDOJO_ADMIN_PASSWORD=${DefectDojoBatchModeAdminPassword} >> $batch_mode_properties_file
+              echo ALLOWED_HOSTS="[\'${DefectDojoALB.DNSName}\',\'$private_ip\',\'127.0.0.1\']" >> $batch_mode_properties_file
+
+              #Run BATCH MODE Script
+              cd ${AppEBSVolumeMountPoint}/django-DefectDojo
+              ./setup.bash -b
+              nohup python manage.py runserver 0.0.0.0:${DefectDojoAppPort} &
+
+              #Changing Admin User password explicitly. Password reset through batch_mode is not working.
+              ./batch_mode/setup-superuser.expect ${DefectDojoBatchModeAdminUser} ${DefectDojoBatchModeAdminPassword}
+              /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource DefectDojoAppInstance --configsets DefectDojoSetup --region ${AWS::Region}
+              /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource DefectDojoAppInstance --region ${AWS::Region}
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: !Join ["-" , [!Ref ApplicationName, "Instance"]]
+    DefectDojoBastionInstance:
+      Type: AWS::EC2::Instance
+      Properties:
+        ImageId: !Ref AMIID
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet:
+            - Fn::ImportValue: !Sub ${ApplicationName}-BastionSG
+          SubnetId:
+            Fn::ImportValue: !Sub ${ApplicationName}-PublicSubnet1ID
+        Tags:
+          -
+            Key: "ApplicationName"
+            Value: !Ref ApplicationName
+          -
+            Key: "Name"
+            Value: !Join ["-" , [!Ref ApplicationName, "Bastion"]]
+          -
+            Key: "public-ip-exception"
+            Value: "proxy"
+  Outputs:
+    ALB:
+      Value: !Ref DefectDojoALB
+    ALBDNSName:
+      Value: !GetAtt DefectDojoALB.DNSName
+    TG:
+      Value: !Ref DefectDojoTG
+    AppInstance:
+      Value: !Ref DefectDojoAppInstance
+    BastionInstance:
+      Value: !Ref DefectDojoBastionInstance
+
+
