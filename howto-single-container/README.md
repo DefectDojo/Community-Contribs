@@ -67,4 +67,7 @@ Also you may remove the image for this container by typing:
 sudo docker image rm ID_OF_YOUR_IMAGE
 ```
 
-## 
+## Create the image
+```
+sudo docker build -t defectdojo -f Dockerfile.update .
+```
