@@ -53,3 +53,27 @@ quit;
 ## Log in to your django-DefectDojo instance
 
 Navigate to http://127.0.0.1:8000/ in your browser and login with admin:admin pair.
+
+## Future errors possible
+
+### Can't connect to defectDojo web server, errors in MySql logs
+```
+django.db.utils.OperationalError: (2002, "Can't connect to local MySQL server through socket '/var/run/mysqld/mysqld.sock' (2)")
+```
+
+Check for mysql errors from the inside of the container:
+
+```
+$ sudo docker exec -it defectdojoapp bash
+# cat /var/log/mysql/error.log
+```
+
+If you will see such string:
+
+```
+...
+2020-02-21T12:45:50.627311Z 11 [Note] Access denied for user 'debian-sys-maint'@'localhost' (using password: YES)
+...
+```
+
+then [this thread from StackOverflow](https://stackoverflow.com/questions/11644300/access-denied-for-user-debian-sys-maint) will be helpful.
