@@ -227,7 +227,7 @@
 
               #Run BATCH MODE Script
               cd ${AppEBSVolumeMountPoint}/django-DefectDojo
-              ./setup.bash -b
+              ./legacy-setup.bash -b
               nohup python manage.py runserver 0.0.0.0:${DefectDojoAppPort} &
 
               #Changing Admin User password explicitly. Password reset through batch_mode is not working.
