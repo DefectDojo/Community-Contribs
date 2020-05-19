@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# Note: make sure this file is executable by systemd
+
+echo "Write code to set ENV variables here"
