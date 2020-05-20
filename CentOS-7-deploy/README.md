@@ -337,7 +337,7 @@ For the **first time** you start DefectDojo, it's recommended to start it 'manua
 
 ```
 # cd /opt/dojo
-# DD_INITIALIZE="true" docker-compose --verbose up
+# source ./env.defectdojo && source ./setEnv.defectdojo && DD_INITIALIZE="true" docker-compose --verbose up
 ```
 
 
