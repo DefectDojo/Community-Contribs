@@ -2,4 +2,18 @@
 
 # Note: make sure this file is executable by systemd
 
-echo "Write code to set ENV variables here"
+# Source env file
+source /opt/dojo/env.defectdojo
+
+# Write code to set ENV variables here
+# Note: ENV variables must be exported to be passed on to docker-compose
+# For example, if you want to set DD_DATABASE_URL, you'd do something like below:
+# export DD_DATABASE_URL="postgres://dojodbusr:LongRandomPasswordForDB@pg.example.com:5432/dojodb"
+
+
+# You can uncomment the line below to debug env variables if needed
+#env | grep "DD" > /opt/dojo/test-env
+
+# You can also fix these into a single file by doing:
+# env | grep "DD" > /opt/dojo/.env
+

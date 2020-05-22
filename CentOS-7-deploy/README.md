@@ -318,7 +318,7 @@ The way you pass in deployment specific information into Docker Compose for Defe
 
 Only for the **first** time you start DefectDojo, you'll need to set this to initialize the installation:
 
-* DD_INITIALIZE - set this to true ONLY for the first time you starup DefectDojo
+* DD_INITIALIZE - set this to true ONLY for the first time you startup DefectDojo
 
 There are other optional ENV variables. See the docker-compose.yml file for more information.
 
@@ -333,34 +333,46 @@ In the appendix below, you'll find suggested places to set these ENV variables.
 
 **Start DefectDojo**
 
-For the **first time** you start DefectDojo, it's recommended to start it 'manually' with the verbose options.  I'd also suggest running this command in a screen session so you have access to a terminal prompt if needed.
+Before starting and initializing DefectDojo, check that the ENV variables work as expected. A quick check for warnings from docker-compose is to:
+
+```
+# source /opt/dojo/setEnv.defectdojo && docker-compose config | grep warning
+```
+
+To see how docker-compose will handle the variable substitutions in the yaml file (a more thorough check), do:
+
+```
+# source /opt/dojo/setEnv.defectdojo && docker-compose config
+```
+
+which will print the final version with substitutions docker-compose will execute.
+
+For the **first time** you start DefectDojo, it's recommended to start it 'manually'.
 
 ```
 # cd /opt/dojo
-# source ./env.defectdojo && source ./setEnv.defectdojo && DD_INITIALIZE="true" docker-compose --verbose up
+# source /opt/dojo/setEnv.defectdojo && DD_INITIALIZE="true" docker-compose up -d
 ```
 
+You can also run with the verbose option to see the full output of docker-compose. I'd also suggest running this command in a screen session so you have access to a terminal prompt if needed.
 
-Depending on how brave you are and how closely you followed these instructions, you can just startup DefectDojo and start enjoying the goodness:
+```
+# cd /opt/dojo
+# source /opt/dojo/setEnv.defectdojo && DD_INITIALIZE="true" docker-compose --verbose up
+```
+
+**SUPER IMPORTANT**
+
+Right after you initialize DefectDojo, run this command to get the Admin passwod so you can log into the Web UI:
+
+```
+# docker logs dojo_initialize_1 | grep Admin
+```
+
+Depending on how things went and how closely you followed these instructions, you can just startup DefectDojo and start enjoying the goodness:
 
 ```
 # systemctl start defectdojo-compose
-```
-
-If you have issues, want to get an idea of what's happening or like seeing loads of debug text, you can do either of these commands.  Consider running them in a screen session if you're going to want your command prompt back.
-
-Run docker-compose in the foreground:
-
-```
-# cd /opt/dojo
-# docker-compose up
-```
-
-Run docker-compose with verbose output:
-
-```
-# cd /opt/dojo
-# docker-compose --verbose up
 ```
 
 ## Appendix
