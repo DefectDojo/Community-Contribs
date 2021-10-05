@@ -38,7 +38,7 @@ NOTE: Do not use default Access Credentials.
 
 Now minIO is running, and we should enable `datashim` so we can automatically create PVC.
 
-For that reason, we need to clone [datashim] and use HELM chart from there.
+For that reason, we need to clone [datashim](https://github.com/datashim-io/datashim/) and use HELM chart from there.
 
 ```bash
 helm install dlf --namespace dlf  --set csi-s3-chart.enabled=true --set csi-nfs-chart.enabled=false --set csi-h3-chart.enabled=false  --set csi-s3-chart.mounter=rclone .
@@ -66,6 +66,9 @@ export AWS_SECRET_ACCESS_KEY=from_mino
 export S3_SERVICE_URL=minio_service #this example http://minio-service.dlf:9000
 export BUCKET_NAME=anyName
 ```
+And apply it to the k8s.
+
+NOTE: keep in mind that are still some gaps how secrets are handled by *datashim*, and there will be improvements during the time, than can break this example.
 
 ```bash
 cat <<EOF | kubectl apply -f -
@@ -122,4 +125,3 @@ kubectl port-forward -n dlf service/minio-service 9000:9000
 ```
 
 And then open a browser to http://localhost:9000
-
