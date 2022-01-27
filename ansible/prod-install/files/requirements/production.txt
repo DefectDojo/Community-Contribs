@@ -7,7 +7,7 @@ python-nmap>=0.3.4
 pytz>=2013.9
 requests>=2.2.1
 wsgiref>=0.1.2
-django-filter==1.0.4
+django-filter==2.4.0
 supervisor
 humanize
 django-bower
