@@ -15,7 +15,7 @@ django-auditlog==0.3.3
 vobject
 html2text
 django-watson==1.3.1
-celery==3.1.24
+celery==5.2.2
 django-polymorphic==1.2
 pdfkit==0.5.0
 django-overextends
