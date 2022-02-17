@@ -1,6 +1,14 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 
+###
+# Note: This is a working template, but just a starting point. For Fargate services to properly scale tasks in and out, additional
+# resource definitions are required. An example; https://github.com/kgekkula/fargate-target-tracking/blob/master/ecs-cluster-fargate.yml 
+###
+# aws cloudformation validate-template --template-body file:///<base_path_here>/aws-fargate.yml --profile <aws_profile_name>
+# aws cloudformation create-stack --stack-name DefectDojo-Fargate --template-body file:///<base_path_here>/aws-fargate.yml --profile <aws_profile_name>
+###
+
 Description:
   CloudFormation template for DefectDojo deployment on AWS Fargate
   Depencencies (not in scope of this template)
@@ -13,16 +21,16 @@ Parameters:
   FargateClusterName:
     Description: Cluster Name
     Type: String
-    Default: existing-fargate-cluster
+    Default: DefectDojo-Cluster
   FargateRole:
     Description: AWS IAM Role
     Type: String
-    Default: arn:aws:iam::xxxxxxx:role/xxxxx-containertaskrole
+    Default: arn:aws:iam::<account_id>:role/<role_name>
   # Database
-  DdDatabaseUrl:
+  DdRdsClusterEndpoint:
     Description: Database URL
     Type: String
-    Default: mysql://defectdojouser:defectdojopassword@defectdojo.xxxxxxx.region.rds.amazonaws.com:3306/defectdojo
+    Default: <cluster_name>.cluster-<cluster_id>.<region>.rds.amazonaws.com
   DdDatabasePort:
     Description: Database Port
     Type: Number
@@ -36,27 +44,28 @@ Parameters:
     Default: django.db.backends.mysql
   # Logging
   LogGroupName:
-    Description: CloudWatch LogGroup /name
+    Description: CloudWatch LogGroup ECS DefectDojo
     Type: String
     Default: /ecs/fargate/defectdojo
   # Network
   NetworkVpcId:
     Description: Fargate vpc
     Type: String
-    Default: vpc-xxxxxx
+    Default: vpc-<vpc_id>
   NetworkSubnet1Id:
     Description: Fargate VPC subnet1
     Type: String
-    Default: subnet-xxxxxx   
+    Default: subnet-<subnet_id>
   NetworkIpIngress:
     Description: Allowed Inbound IP for NGINX traffic on 8080 (used by SG)
     Type: String
-    Default: 0.0.0.0/32
+    Default: <your_ip>/32
+
   # Region
   Region:
     Description: AWS Region
     Type: String
-    Default: eu-central-1
+    Default: <region>
 
 Resources:
   ## Logging
@@ -76,8 +85,8 @@ Resources:
       NetworkMode: awsvpc
       Family: defectdojo
       ExecutionRoleArn: !Ref FargateRole
-      Cpu: '1024'
-      Memory: '2048'
+      Cpu: '2048'
+      Memory: '4096'
       ContainerDefinitions:
 
       - Name: nginx
@@ -96,8 +105,12 @@ Resources:
         - ContainerPort: 8080
           Protocol: tcp
         Environment:
-        - Name:  DD_UWSGI_HOST
-          Value: 127.0.0.1  
+        - Name: DD_UWSGI_HOST
+          Value: 127.0.0.1 
+        - Name: DD_UWSGI_PASS
+          Value: uwsgi_server
+        - Name: DD_UWSGI_PORT
+          Value: 3031 
 
       - Name: uwsgi
         Image: defectdojo/defectdojo-django:latest
@@ -116,18 +129,27 @@ Resources:
         Environment:
         - Name: DD_DEBUG
           Value: "on"
-        - Name : DD_ALLOWED_HOSTSs
+        - Name : DD_ALLOWED_HOSTS
           Value: "*"
         - Name:  DD_DATABASE_URL
-          Value: !Ref DdDatabaseUrl
+          Value: !Sub
+          - "mysql://${User}:${Password}@${ClusterWriterEndpoint}:${Port}/defectdojo"
+          - User: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:username}}'
+            Password: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:password}}'
+            ClusterWriterEndpoint: !Ref DdRdsClusterEndpoint
+            Port: !Ref DdDatabasePort
         - Name:  DD_DATABASE_PORT
           Value: !Ref DdDatabasePort
         - Name:  DD_DATABASE_ENGINE
           Value: !Ref DdDatabaseEngine
+        - Name: DD_CELERY_BROKER_HOST
+          Value: 127.0.0.1
         - Name : DD_CELERY_BROKER_USER
           Value: guest
         - Name: DD_CELERY_BROKER_PASSWORD
           Value: guest
+        - Name: DD_SECRET_KEY
+          Value: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:ddSecretKey}}'
 
       - Name: celerybeat
         Image: defectdojo/defectdojo-django:latest
@@ -145,7 +167,12 @@ Resources:
             awslogs-stream-prefix: ecs
         Environment:
         - Name:  DD_DATABASE_URL
-          Value: !Ref DdDatabaseUrl
+          Value: !Sub
+          - "mysql://${User}:${Password}@${ClusterWriterEndpoint}:${Port}/defectdojo"
+          - User: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:username}}'
+            Password: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:password}}'
+            ClusterWriterEndpoint: !Ref DdRdsClusterEndpoint
+            Port: !Ref DdDatabasePort
         - Name:  DD_DATABASE_PORT
           Value: !Ref DdDatabasePort
         - Name:  DD_DATABASE_ENGINE
@@ -156,6 +183,8 @@ Resources:
           Value: guest
         - Name: DD_CELERY_BROKER_HOST
           Value: 127.0.0.1
+        - Name: DD_SECRET_KEY
+          Value: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:ddSecretKey}}'
 
       - Name: celeryworker
         Image: defectdojo/defectdojo-django:latest
@@ -173,7 +202,12 @@ Resources:
             awslogs-stream-prefix: ecs
         Environment:
         - Name:  DD_DATABASE_URL
-          Value: !Ref DdDatabaseUrl
+          Value: !Sub
+          - "mysql://${User}:${Password}@${ClusterWriterEndpoint}:${Port}/defectdojo"
+          - User: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:username}}'
+            Password: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:password}}'
+            ClusterWriterEndpoint: !Ref DdRdsClusterEndpoint
+            Port: !Ref DdDatabasePort
         - Name:  DD_DATABASE_PORT
           Value: !Ref DdDatabasePort
         - Name:  DD_DATABASE_ENGINE
@@ -183,7 +217,9 @@ Resources:
         - Name: DD_CELERY_BROKER_PASSWORD
           Value: guest   
         - Name: DD_CELERY_BROKER_HOST
-          Value: 127.0.0.1                          
+          Value: 127.0.0.1             
+        - Name: DD_SECRET_KEY
+          Value: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:ddSecretKey}}'             
 
       - Name: initializer
         Image: defectdojo/defectdojo-django:latest
@@ -198,7 +234,12 @@ Resources:
             awslogs-stream-prefix: ecs
         Environment:
         - Name:  DD_DATABASE_URL
-          Value: !Ref DdDatabaseUrl
+          Value: !Sub
+          - "mysql://${User}:${Password}@${ClusterWriterEndpoint}:${Port}/defectdojo"
+          - User: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:username}}'
+            Password: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:password}}'
+            ClusterWriterEndpoint: !Ref DdRdsClusterEndpoint
+            Port: !Ref DdDatabasePort
         - Name:  DD_ADMIN_USER
           Value: admin
         - Name : DD_ADMIN_MAIL
@@ -209,6 +250,8 @@ Resources:
           Value: User
         - Name:  DD_INITIALIZE
           Value: true
+        - Name: DD_SECRET_KEY
+          Value: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:ddSecretKey}}'
 
       - Name: rabbitmq
         Image: rabbitmq:3.7
@@ -248,8 +291,8 @@ Resources:
   SecurityGroupDefectDojo:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: defectdojo
-      GroupDescription: defectdojo      
+      GroupName: DefectDojo-ECS-SG
+      GroupDescription: Security Group for the fargate defectdojo cluster     
       SecurityGroupIngress:
       - IpProtocol: tcp
         FromPort: 8080
@@ -259,6 +302,11 @@ Resources:
       Tags:
         - Key: Name
           Value: defectdojo
+        - Key: Creator
+          Value: <your_name_here>
+        - Key: Contact
+          Value: <your_email_address>
+
   SecurityGroupIngressDefectDojo:
     Type: AWS::EC2::SecurityGroupIngress
     DependsOn: SecurityGroupDefectDojo
