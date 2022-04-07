@@ -2,9 +2,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 ###
-# Note: This is a working template, but just a starting point. For Fargate services to properly scale tasks in and out, additional
-# resource definitions are required. An example; https://github.com/kgekkula/fargate-target-tracking/blob/master/ecs-cluster-fargate.yml 
-###
 # aws cloudformation validate-template --template-body file:///<base_path_here>/aws-fargate.yml --profile <aws_profile_name>
 # aws cloudformation create-stack --stack-name DefectDojo-Fargate --template-body file:///<base_path_here>/aws-fargate.yml --profile <aws_profile_name>
 ###
@@ -22,6 +19,10 @@ Parameters:
     Description: Cluster Name
     Type: String
     Default: DefectDojo-Cluster
+  FargateServiceName:
+    Description: ServiceName attribute of the Fargate service
+    Type: String
+    Default: DefectDojo-Service
   FargateRole:
     Description: AWS IAM Role
     Type: String
@@ -47,20 +48,46 @@ Parameters:
     Description: CloudWatch LogGroup ECS DefectDojo
     Type: String
     Default: /ecs/fargate/defectdojo
+  # An EFS volume mount is required for custom settings that cannot be represented as environment
+  # variables, and perhaps more importantly the RDS TLS certificate.  
+  #
+  # DATABASES['default']['OPTIONS'] = {
+  #  'ssl': {'ca': '/app/dojo/settings/rds-combined-ca-bundle.pem'}
+  # }
+  FileSystemId:
+    Description: File System for EFS Mount
+    Type: String
+    Default: <efs_filesystem_id>
   # Network
   NetworkVpcId:
     Description: Fargate vpc
     Type: String
-    Default: vpc-<vpc_id>
+    Default: vpc-vpc_id>
   NetworkSubnet1Id:
     Description: Fargate VPC subnet1
     Type: String
-    Default: subnet-<subnet_id>
+    Default: subnet-<region_1_subnet_id>
+  NetworkSubnet2Id:
+    Description: Fargate VPC subnet2
+    Type: String
+    Default: subnet-<region_2_subnet_id>   
+  NetworkSubnet3Id:
+    Description: Fargate VPC subnet3
+    Type: String
+    Default: subnet-<region_3_subnet_id> 
   NetworkIpIngress:
     Description: Allowed Inbound IP for NGINX traffic on 8080 (used by SG)
     Type: String
     Default: <your_ip>/32
-
+  # Security Groups
+  AuroraSecurityGroupId:
+    Description: Security Group for the DefectDojo Aurora Cluster
+    Type: String
+    Default: <security_group_id>
+  EfsVolumeSecurityGroupId:
+   Description: Security Group for the EFS volume mounted within the container
+   Type: String
+   Default: <security_group_id>
   # Region
   Region:
     Description: AWS Region
@@ -87,6 +114,11 @@ Resources:
       ExecutionRoleArn: !Ref FargateRole
       Cpu: '2048'
       Memory: '4096'
+      Volumes:
+        - Name: EFS_BindMount_Settings
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref FileSystemId
+            RootDirectory: /settings
       ContainerDefinitions:
 
       - Name: nginx
@@ -95,6 +127,8 @@ Resources:
         - ContainerName: uwsgi
           Condition: START
         Essential: true
+        HealthCheck:
+          Command: [ "CMD-SHELL", "curl -f http://localhost:8080/ || exit 1" ]
         LogConfiguration:
           LogDriver: awslogs
           Options:
@@ -123,31 +157,35 @@ Resources:
             awslogs-group: !Ref LogGroupName
             awslogs-region: !Ref Region
             awslogs-stream-prefix: ecs
+        MountPoints:
+          - ContainerPath: /app/dojo/settings
+            ReadOnly: false
+            SourceVolume: EFS_BindMount_Settings
         PortMappings:
         - ContainerPort: 3031
           Protocol: tcp
         Environment:
         - Name: DD_DEBUG
           Value: "on"
-        - Name : DD_ALLOWED_HOSTS
+        - Name: DD_ALLOWED_HOSTS
           Value: "*"
-        - Name:  DD_DATABASE_URL
+        - Name: DD_DATABASE_URL
           Value: !Sub
           - "mysql://${User}:${Password}@${ClusterWriterEndpoint}:${Port}/defectdojo"
           - User: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:username}}'
             Password: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:password}}'
             ClusterWriterEndpoint: !Ref DdRdsClusterEndpoint
             Port: !Ref DdDatabasePort
-        - Name:  DD_DATABASE_PORT
+        - Name: DD_DATABASE_HOST
+          Value: !Ref DdRdsClusterEndpoint
+        - Name: DD_DATABASE_PASSWORD
+          Value: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:password}}'
+        - Name: DD_DATABASE_PORT
           Value: !Ref DdDatabasePort
-        - Name:  DD_DATABASE_ENGINE
+        - Name: DD_DATABASE_ENGINE
           Value: !Ref DdDatabaseEngine
-        - Name: DD_CELERY_BROKER_HOST
-          Value: 127.0.0.1
-        - Name : DD_CELERY_BROKER_USER
-          Value: guest
-        - Name: DD_CELERY_BROKER_PASSWORD
-          Value: guest
+        - Name: DD_CELERY_BROKER_URL
+          Value: amqp://guest:guest@127.0.0.1:5672
         - Name: DD_SECRET_KEY
           Value: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:ddSecretKey}}'
 
@@ -165,24 +203,28 @@ Resources:
             awslogs-group: !Ref LogGroupName
             awslogs-region: !Ref Region
             awslogs-stream-prefix: ecs
+        MountPoints:
+          - ContainerPath: /app/dojo/settings
+            ReadOnly: false
+            SourceVolume: EFS_BindMount_Settings
         Environment:
-        - Name:  DD_DATABASE_URL
+        - Name: DD_DATABASE_URL
           Value: !Sub
           - "mysql://${User}:${Password}@${ClusterWriterEndpoint}:${Port}/defectdojo"
           - User: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:username}}'
             Password: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:password}}'
             ClusterWriterEndpoint: !Ref DdRdsClusterEndpoint
             Port: !Ref DdDatabasePort
-        - Name:  DD_DATABASE_PORT
+        - Name: DD_DATABASE_HOST
+          Value: !Ref DdRdsClusterEndpoint
+        - Name: DD_DATABASE_PASSWORD
+          Value: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:password}}'
+        - Name: DD_DATABASE_PORT
           Value: !Ref DdDatabasePort
-        - Name:  DD_DATABASE_ENGINE
+        - Name: DD_DATABASE_ENGINE
           Value: !Ref DdDatabaseEngine
-        - Name : DD_CELERY_BROKER_USER
-          Value: guest
-        - Name: DD_CELERY_BROKER_PASSWORD
-          Value: guest
-        - Name: DD_CELERY_BROKER_HOST
-          Value: 127.0.0.1
+        - Name: DD_CELERY_BROKER_URL
+          Value: amqp://guest:guest@127.0.0.1:5672
         - Name: DD_SECRET_KEY
           Value: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:ddSecretKey}}'
 
@@ -200,6 +242,10 @@ Resources:
             awslogs-group: !Ref LogGroupName
             awslogs-region: !Ref Region
             awslogs-stream-prefix: ecs
+        MountPoints:
+          - ContainerPath: /app/dojo/settings
+            ReadOnly: false
+            SourceVolume: EFS_BindMount_Settings
         Environment:
         - Name:  DD_DATABASE_URL
           Value: !Sub
@@ -208,16 +254,16 @@ Resources:
             Password: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:password}}'
             ClusterWriterEndpoint: !Ref DdRdsClusterEndpoint
             Port: !Ref DdDatabasePort
-        - Name:  DD_DATABASE_PORT
+        - Name: DD_DATABASE_HOST
+          Value: !Ref DdRdsClusterEndpoint
+        - Name: DD_DATABASE_PASSWORD
+          Value: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:password}}'
+        - Name: DD_DATABASE_PORT
           Value: !Ref DdDatabasePort
-        - Name:  DD_DATABASE_ENGINE
+        - Name: DD_DATABASE_ENGINE
           Value: !Ref DdDatabaseEngine
-        - Name : DD_CELERY_BROKER_USER
-          Value: guest
-        - Name: DD_CELERY_BROKER_PASSWORD
-          Value: guest   
-        - Name: DD_CELERY_BROKER_HOST
-          Value: 127.0.0.1             
+        - Name: DD_CELERY_BROKER_URL
+          Value: amqp://guest:guest@127.0.0.1:5672     
         - Name: DD_SECRET_KEY
           Value: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:ddSecretKey}}'             
 
@@ -232,6 +278,10 @@ Resources:
             awslogs-group: !Ref LogGroupName
             awslogs-region: !Ref Region
             awslogs-stream-prefix: ecs
+        MountPoints:
+          - ContainerPath: /app/dojo/settings
+            ReadOnly: false
+            SourceVolume: EFS_BindMount_Settings
         Environment:
         - Name:  DD_DATABASE_URL
           Value: !Sub
@@ -240,6 +290,10 @@ Resources:
             Password: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:password}}'
             ClusterWriterEndpoint: !Ref DdRdsClusterEndpoint
             Port: !Ref DdDatabasePort
+        - Name: DD_DATABASE_HOST
+          Value: !Ref DdRdsClusterEndpoint
+        - Name: DD_DATABASE_PASSWORD
+          Value: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:password}}'
         - Name:  DD_ADMIN_USER
           Value: admin
         - Name : DD_ADMIN_MAIL
@@ -254,7 +308,7 @@ Resources:
           Value: '{{resolve:secretsmanager:<secret>/<name>/<here>:SecretString:ddSecretKey}}'
 
       - Name: rabbitmq
-        Image: rabbitmq:3.7
+        Image: rabbitmq:3.9.13-alpine@sha256:fc807e9439ac861631b022d191c57c0d3c28e54f72d02f36bf0bbd06d699cc8b
         Essential: true
         LogConfiguration:
           LogDriver: awslogs
@@ -275,7 +329,7 @@ Resources:
         MaximumPercent: 200
         MinimumHealthyPercent: 100
       DesiredCount: 1
-      # EnableECSManagedTags: true
+      EnableECSManagedTags: true
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -284,7 +338,10 @@ Resources:
           - !Ref SecurityGroupDefectDojo
           Subnets:
           - !Ref NetworkSubnet1Id
+          - !Ref NetworkSubnet2Id
+          - !Ref NetworkSubnet3Id
       # PropagateTags: SERVICE
+      ServiceName: !Ref FargateServiceName
       TaskDefinition: !Ref TaskDefinition
 
   ## Security Group
@@ -294,6 +351,10 @@ Resources:
       GroupName: DefectDojo-ECS-SG
       GroupDescription: Security Group for the fargate defectdojo cluster     
       SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: !Ref NetworkIpIngress
       - IpProtocol: tcp
         FromPort: 8080
         ToPort: 8080
@@ -307,12 +368,52 @@ Resources:
         - Key: Contact
           Value: <your_email_address>
 
-  SecurityGroupIngressDefectDojo:
+  SecurityGroupIngressFromAurora:
     Type: AWS::EC2::SecurityGroupIngress
-    DependsOn: SecurityGroupDefectDojo
     Properties:
       GroupId: !Ref SecurityGroupDefectDojo
+      Description: Inbound from the Aurora MySQL cluster
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+      SourceSecurityGroupId: !Ref AuroraSecurityGroupId
+
+  SecurityGroupIngressFromSelfAllPorts:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupDefectDojo
+      Description: A loopback on the ECS Fargate cluster
       IpProtocol: tcp
       FromPort: 0
       ToPort: 65535
       SourceSecurityGroupId: !Ref SecurityGroupDefectDojo
+
+  SecurityGroupAuroraIngressFromFargate:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AuroraSecurityGroupId
+      Description: Inbound from the ECS Fargate cluster
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+      SourceSecurityGroupId: !Ref SecurityGroupDefectDojo
+
+  SecurityGroupEfsIngressFromFargate:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EfsVolumeSecurityGroupId
+      Description: Inbound from the ECS Fargate cluster
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref SecurityGroupDefectDojo
+
+  SecurityGroupDefectDojoInboundFromEfs:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupDefectDojo
+      Description: Inbound NFS from the EFS volume
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref EfsVolumeSecurityGroupId
