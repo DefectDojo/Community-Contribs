@@ -1,4 +1,4 @@
-DISCLAIMER: This configuration has been tested on GKE with Autopilot enabled. Should be optimized for production, but demonstrates how DefectDojo can be deployed on top of the GKE platform.
+DISCLAIMER: This configuration has been tested on GKE with Autopilot enabled. Working example is not optimized for production, but demonstrates how DefectDojo can be deployed on top of the GKE platform.
 
 Prerequisites:
 - GKE cluster with proper access
